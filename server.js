@@ -300,3 +300,7 @@ app.get("/debug/db", async (req, res) => {
 server.listen(3000, () => {
   console.log("listening on *:3000")
 })
+// Iniciar el servidor en el puerto 3000
+http.listen(3000, () => {
+  console.log("Servidor escuchando en http://localhost:3000")
+})
