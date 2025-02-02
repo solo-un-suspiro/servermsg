@@ -3,8 +3,9 @@ const app = express()
 const http = require("http").createServer(app)
 const io = require("socket.io")(http, {
   cors: {
-    origin: "https://test.nexwey.online/msg-to-msg/" || "http://localhost:5173",
+    origin: "*", // Allow all origins
     methods: ["GET", "POST"],
+    credentials: true
   },
 })
 const cors = require("cors")
@@ -17,9 +18,10 @@ const fs = require("fs")
 // Configuración de variables de entorno
 require("dotenv").config()
 
+// Allow all origins in Express CORS middleware
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: "*", // Allow all origins
     credentials: true,
   }),
 )
@@ -63,8 +65,6 @@ pool.getConnection((err, connection) => {
     connection.release()
   }
 })
-
-    
 
 // Rutas de autenticación
 app.post("/register", async (req, res) => {
@@ -191,4 +191,3 @@ const PORT = process.env.PORT || 3000
 http.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`)
 })
-
