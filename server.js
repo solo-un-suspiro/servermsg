@@ -1,14 +1,10 @@
-
-
-
-
 const express = require("express")
 const app = express()
 const http = require("http").createServer(app)
 const { Server } = require("socket.io")
 const io = new Server(http, {
   cors: {
-    origin: "*", // Allow all origins
+    origin: "https://test.nexwey.online",
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -26,7 +22,8 @@ require("dotenv").config()
 // Allow all origins in Express CORS middleware
 app.use(
   cors({
-    origin: "*", // Allow all origins
+    origin: "https://test.nexwey.online",
+    methods: ["GET", "POST"],
     credentials: true,
   }),
 )
@@ -53,13 +50,12 @@ const upload = multer({ storage: storage })
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
-  password: 'Q~Z#PZbNz]4',
+  password: "Q~Z#PZbNz]4",
   database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-
- })
+})
 
 // Verificar la conexión a la base de datos
 const testConnection = async () => {
@@ -123,11 +119,17 @@ app.get("/messages/:roomId", async (req, res) => {
   const { roomId } = req.params
   try {
     console.log("Fetching messages for room ID:", roomId)
-    const [rows] = await pool.query(
-      "SELECT m.*, u.username FROM messages m JOIN users u ON m.user_id = u.id WHERE m.room_id = ? ORDER BY m.created_at ASC LIMIT 50",
-      [roomId],
-    )
-    console.log(`Found ${rows.length} messages for room ID ${roomId}`)
+    let query =
+      "SELECT m.*, u.username FROM messages m JOIN users u ON m.user_id = u.id WHERE m.room_id = ? ORDER BY m.created_at ASC LIMIT 50"
+    const params = [roomId]
+
+    if (isNaN(roomId)) {
+      query =
+        "SELECT m.*, u.username FROM messages m JOIN users u ON m.user_id = u.id JOIN rooms r ON m.room_id = r.id WHERE r.name = ? ORDER BY m.created_at ASC LIMIT 50"
+    }
+
+    const [rows] = await pool.query(query, params)
+    console.log(`Found ${rows.length} messages for room ID/name ${roomId}`)
     res.json(rows)
   } catch (error) {
     console.error("Error al obtener mensajes:", error)
