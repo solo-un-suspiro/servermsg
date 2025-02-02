@@ -3,7 +3,7 @@ const app = express()
 const http = require("http").createServer(app)
 const io = require("socket.io")(http, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: "https://test.nexwey.online/msg-to-msg/" || "http://localhost:5173",
     methods: ["GET", "POST"],
   },
 })
