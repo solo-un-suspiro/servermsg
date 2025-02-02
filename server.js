@@ -1,11 +1,15 @@
+// Configuración de la base de datos
+
+
 const express = require("express")
 const app = express()
 const http = require("http").createServer(app)
-const io = require("socket.io")(http, {
+const { Server } = require("socket.io")
+const io = new Server(http, {
   cors: {
     origin: "*", // Allow all origins
     methods: ["GET", "POST"],
-    credentials: true
+    credentials: true,
   },
 })
 const cors = require("cors")
@@ -45,7 +49,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage })
 
 // Configuración de la base de datos
-const pool = mysql.createPool({
+  const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: 'Q~Z#PZbNz]4',
@@ -54,56 +58,31 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
 })
-//verificar la conexión a la base de datos y los datos de conexión
-pool.getConnection((err, connection) => {
-  if (err) {
-    console.error("Error al conectar a la base de datos:", err)
-    console.log("Verifica los datos de conexión en el archivo .env")
-    
-  } else {
-    console.log("Conexión exitosa a la base de datos")
+
+// Verificar la conexión a la base de datos
+const testConnection = async () => {
+  try {
+    const connection = await pool.getConnection()
+    console.log("Database connected successfully")
+
+    // Verificar que las tablas existen
+    const [tables] = await connection.query("SHOW TABLES")
+    console.log("Available tables:", tables)
+
     connection.release()
+  } catch (err) {
+    console.error("Database connection error:", err)
+    console.log("Environment variables:", {
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      database: process.env.DB_NAME,
+    })
   }
-})
+}
+
+testConnection()
 
 // Rutas de autenticación
-// Endpoint temporal para verificar la conexión a la base de datos
-app.get('/debug/db', async (req, res) => {
-  try {
-    const connection = await pool.getConnection();
-    const [tables] = await connection.query('SHOW TABLES');
-    const [roomsCount] = await connection.query('SELECT COUNT(*) as count FROM rooms');
-    const [messagesCount] = await connection.query('SELECT COUNT(*) as count FROM messages');
-    
-    res.json({
-      status: 'connected',
-      tables,
-      counts: {
-        rooms: roomsCount[0].count,
-        messages: messagesCount[0].count
-      }
-    });
-    
-    connection.release();
-  } catch (error) {
-    res.status(500).json({
-      status: 'error',
-      error: error.message
-    });
-  }
-});
-
-// Endpoint temporal para verificar las salas
-app.get('/debug/rooms', async (req, res) => {
-  try {
-    const [rooms] = await pool.query('SELECT * FROM rooms');
-    res.json(rooms);
-  } catch (error) {
-    res.status(500).json({
-      error: error.message
-    });
-  }
-});
 app.post("/register", async (req, res) => {
   const { username, password } = req.body
   try {
@@ -172,17 +151,32 @@ app.get("/rooms", async (req, res) => {
   }
 })
 
+// Ruta para obtener una sala específica
+app.get("/rooms/:roomId", async (req, res) => {
+  const { roomId } = req.params
+  try {
+    const [rows] = await pool.query("SELECT * FROM rooms WHERE id = ?", [roomId])
+    if (rows.length > 0) {
+      res.json(rows[0])
+    } else {
+      res.status(404).json({ message: "Sala no encontrada" })
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Error al obtener la sala", error: error.message })
+  }
+})
+
 // Manejo de conexiones de socket
 io.on("connection", (socket) => {
   console.log("Un usuario se ha conectado")
 
   socket.on("join room", (roomId) => {
-    socket.join(roomId)
+    socket.join(roomId.toString())
     console.log(`Usuario unido a la sala ${roomId}`)
   })
 
   socket.on("leave room", (roomId) => {
-    socket.leave(roomId)
+    socket.leave(roomId.toString())
     console.log(`Usuario ha dejado la sala ${roomId}`)
   })
 
@@ -204,7 +198,7 @@ io.on("connection", (socket) => {
         type,
         created_at: new Date(),
       }
-      io.to(roomId).emit("chat message", newMessage)
+      io.to(roomId.toString()).emit("chat message", newMessage)
     } catch (error) {
       console.error("Error al guardar el mensaje:", error)
     }
@@ -224,7 +218,45 @@ app.post("/upload", upload.single("image"), (req, res) => {
   }
 })
 
+// Endpoints de depuración
+app.get("/debug/db", async (req, res) => {
+  try {
+    const connection = await pool.getConnection()
+    const [tables] = await connection.query("SHOW TABLES")
+    const [roomsCount] = await connection.query("SELECT COUNT(*) as count FROM rooms")
+    const [messagesCount] = await connection.query("SELECT COUNT(*) as count FROM messages")
+
+    res.json({
+      status: "connected",
+      tables,
+      counts: {
+        rooms: roomsCount[0].count,
+        messages: messagesCount[0].count,
+      },
+    })
+
+    connection.release()
+  } catch (error) {
+    res.status(500).json({
+      status: "error",
+      error: error.message,
+    })
+  }
+})
+
+app.get("/debug/rooms", async (req, res) => {
+  try {
+    const [rooms] = await pool.query("SELECT * FROM rooms")
+    res.json(rooms)
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+    })
+  }
+})
+
 const PORT = process.env.PORT || 3000
 http.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`)
 })
+
