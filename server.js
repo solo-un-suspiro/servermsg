@@ -118,17 +118,17 @@ app.post("/login", async (req, res) => {
 app.get("/messages/:roomId", async (req, res) => {
   const { roomId } = req.params
   try {
-    console.log("Fetching messages for room ID:", roomId)
-    let query =
-      "SELECT m.*, u.username FROM messages m JOIN users u ON m.user_id = u.id WHERE m.room_id = ? ORDER BY m.created_at ASC LIMIT 50"
-    const params = [roomId]
-
-    if (isNaN(roomId)) {
-      query =
-        "SELECT m.*, u.username FROM messages m JOIN users u ON m.user_id = u.id JOIN rooms r ON m.room_id = r.id WHERE r.name = ? ORDER BY m.created_at ASC LIMIT 50"
-    }
-
-    const [rows] = await pool.query(query, params)
+    console.log("Fetching messages for room ID/name:", roomId)
+    const query = `
+      SELECT m.*, u.username, r.name as room_name 
+      FROM messages m 
+      JOIN users u ON m.user_id = u.id 
+      JOIN rooms r ON m.room_id = r.id 
+      WHERE r.id = ? OR r.name = ? 
+      ORDER BY m.created_at ASC 
+      LIMIT 50
+    `
+    const [rows] = await pool.query(query, [roomId, roomId])
     console.log(`Found ${rows.length} messages for room ID/name ${roomId}`)
     res.json(rows)
   } catch (error) {
@@ -191,17 +191,36 @@ io.on("connection", (socket) => {
     try {
       const { userId, username, content, roomId, type } = msg
       console.log("Received message:", { userId, username, content, roomId, type })
+
+      // Check if the user exists
+      const [userExists] = await pool.query("SELECT id FROM users WHERE id = ?", [userId])
+      if (userExists.length === 0) {
+        console.error("User does not exist:", userId)
+        return
+      }
+
+      // Check if the room exists, if not, create it
+      let roomIdNumber
+      const [roomExists] = await pool.query("SELECT id FROM rooms WHERE name = ?", [roomId])
+      if (roomExists.length === 0) {
+        const [newRoom] = await pool.query("INSERT INTO rooms (name) VALUES (?)", [roomId])
+        roomIdNumber = newRoom.insertId
+      } else {
+        roomIdNumber = roomExists[0].id
+      }
+
       const [result] = await pool.query("INSERT INTO messages (user_id, room_id, content, type) VALUES (?, ?, ?, ?)", [
         userId,
-        roomId,
+        roomIdNumber,
         content,
         type,
       ])
+
       const newMessage = {
         id: result.insertId,
         user_id: userId,
         username,
-        room_id: roomId,
+        room_id: roomIdNumber,
         content,
         type,
         created_at: new Date(),
@@ -261,6 +280,23 @@ app.get("/debug/rooms", async (req, res) => {
     res.status(500).json({
       error: error.message,
     })
+  }
+})
+
+app.post("/check-user", async (req, res) => {
+  const { userId, username } = req.body
+  try {
+    const [userExists] = await pool.query("SELECT id FROM users WHERE id = ?", [userId])
+    if (userExists.length === 0) {
+      // User doesn't exist, create a new one
+      const [result] = await pool.query("INSERT INTO users (id, username) VALUES (?, ?)", [userId, username])
+      res.status(201).json({ message: "User created", userId: result.insertId })
+    } else {
+      res.json({ message: "User exists", userId })
+    }
+  } catch (error) {
+    console.error("Error checking/creating user:", error)
+    res.status(500).json({ message: "Error checking/creating user", error: error.message })
   }
 })
 
