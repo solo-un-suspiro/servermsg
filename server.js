@@ -1,4 +1,5 @@
-// Configuración de la base de datos
+
+
 
 
 const express = require("express")
@@ -49,7 +50,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage })
 
 // Configuración de la base de datos
-  const pool = mysql.createPool({
+const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: 'Q~Z#PZbNz]4',
@@ -57,7 +58,8 @@ const upload = multer({ storage: storage })
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-})
+
+ })
 
 // Verificar la conexión a la base de datos
 const testConnection = async () => {
@@ -120,12 +122,15 @@ app.post("/login", async (req, res) => {
 app.get("/messages/:roomId", async (req, res) => {
   const { roomId } = req.params
   try {
+    console.log("Fetching messages for room ID:", roomId)
     const [rows] = await pool.query(
       "SELECT m.*, u.username FROM messages m JOIN users u ON m.user_id = u.id WHERE m.room_id = ? ORDER BY m.created_at ASC LIMIT 50",
       [roomId],
     )
+    console.log(`Found ${rows.length} messages for room ID ${roomId}`)
     res.json(rows)
   } catch (error) {
+    console.error("Error al obtener mensajes:", error)
     res.status(500).json({ message: "Error al obtener mensajes", error: error.message })
   }
 })
@@ -183,6 +188,7 @@ io.on("connection", (socket) => {
   socket.on("chat message", async (msg) => {
     try {
       const { userId, username, content, roomId, type } = msg
+      console.log("Received message:", { userId, username, content, roomId, type })
       const [result] = await pool.query("INSERT INTO messages (user_id, room_id, content, type) VALUES (?, ?, ?, ?)", [
         userId,
         roomId,
@@ -198,6 +204,7 @@ io.on("connection", (socket) => {
         type,
         created_at: new Date(),
       }
+      console.log("Emitting new message:", newMessage)
       io.to(roomId.toString()).emit("chat message", newMessage)
     } catch (error) {
       console.error("Error al guardar el mensaje:", error)
