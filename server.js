@@ -67,6 +67,43 @@ pool.getConnection((err, connection) => {
 })
 
 // Rutas de autenticación
+// Endpoint temporal para verificar la conexión a la base de datos
+app.get('/debug/db', async (req, res) => {
+  try {
+    const connection = await pool.getConnection();
+    const [tables] = await connection.query('SHOW TABLES');
+    const [roomsCount] = await connection.query('SELECT COUNT(*) as count FROM rooms');
+    const [messagesCount] = await connection.query('SELECT COUNT(*) as count FROM messages');
+    
+    res.json({
+      status: 'connected',
+      tables,
+      counts: {
+        rooms: roomsCount[0].count,
+        messages: messagesCount[0].count
+      }
+    });
+    
+    connection.release();
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      error: error.message
+    });
+  }
+});
+
+// Endpoint temporal para verificar las salas
+app.get('/debug/rooms', async (req, res) => {
+  try {
+    const [rooms] = await pool.query('SELECT * FROM rooms');
+    res.json(rooms);
+  } catch (error) {
+    res.status(500).json({
+      error: error.message
+    });
+  }
+});
 app.post("/register", async (req, res) => {
   const { username, password } = req.body
   try {
